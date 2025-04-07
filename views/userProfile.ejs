@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfil de <%= userProfile.nome %>
+  </title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+
+<body>
+  <div class="container">
+
+    <div class="profile-header">
+      <% if (userProfile.foto_perfil) { %>
+        <img src="<%= userProfile.foto_perfil %>" alt="Foto de Perfil" class="profile-picture">
+        <% } %>
+          <div class="profile-info">
+            <h2>
+              <%= userProfile.nome %>
+            </h2>
+            <p><strong>Email:</strong>
+              <%= userProfile.email %>
+            </p>
+            <% if (userProfile.data_nascimento) { %>
+              <p><strong>Data de Nascimento:</strong>
+                <%= new Date(userProfile.data_nascimento).toLocaleDateString('pt-BR') %>
+              </p>
+              <% } %>
+                <% if (userProfile.biografia) { %>
+                  <p>
+                    <%= userProfile.biografia %>
+                  </p>
+                  <% } %>
+                    <div class="profile-stats">
+                      <span><strong>Seguidores:</strong>
+                        <%= userProfile.seguidores %>
+                      </span>
+                      <span><strong>Seguindo:</strong>
+                        <%= userProfile.seguindo %>
+                      </span>
+                    </div>
+                    <% if (user && user.id !==userProfile.id) { %>
+                      <form action="/user/<%= userProfile.isFollowing ? 'unfollow' : 'follow' %>/<%= userProfile.id %>"
+                        method="POST">
+                        <button type="submit" class="follow-btn">
+                          <%= userProfile.isFollowing ? 'Seguindo' : 'Seguir' %>
+                        </button>
+                      </form>
+                      <% } %>
+          </div>
+    </div>
+
+
+    <div class="post-grid">
+      <% if (userPosts.length> 0 || userAlbums.length > 0) { %>
+        <% userPosts.forEach(post=> { %>
+          <div class="post-thumbnail">
+            <% if (post.arquivo_foto) { %>
+              <img src="<%= post.arquivo_foto %>" alt="Post">
+              <% } %>
+          </div>
+          <% }) %>
+            <% userAlbums.forEach(album=> { %>
+              <div class="album-thumbnail">
+                <% if (album.fotos) { %>
+                  <img src="<%= album.fotos.split(',')[0] %>" alt="Álbum">
+                  <% } %>
+                    <div class="album-overlay">
+                      <span>Álbum</span>
+                    </div>
+              </div>
+              <% }) %>
+                <% } else { %>
+                  <p>Este usuário ainda não possui postagens ou álbuns.</p>
+                  <% } %>
+    </div>
+  </div>
+</body>
+
+</html>

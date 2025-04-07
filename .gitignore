@@ -1,0 +1,4 @@
+/uploads/pictures/*
+/uploads/posts/*
+/.vscode/*
+node_modules/*

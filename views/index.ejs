@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feed</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+
+<body data-user-id="<%= user ? user.id : '' %>">
+  <div class="container">
+
+    <header class="header">
+      <h1 class="logo">Nava</h1>
+      <nav class="navbar">
+        <ul>
+          <% if (user) { %>
+            <li><a href="/user/<%= user.id %>">Perfil</a></li>
+            <li><a href="/auth/logout">Sair</a></li>
+            <li>
+              <button id="notification-bell" class="notification-bell">🔔</button>
+            </li>
+            <% } else { %>
+              <li><a href="/auth/register">Cadastro</a></li>
+              <li><a href="/auth/login">Entrar</a></li>
+              <% } %>
+        </ul>
+      </nav>
+    </header>
+
+
+    <div id="notification-menu" class="notification-menu" style="display: none;">
+      <div class="notification-menu-content">
+        <h2>Notificações</h2>
+        <ul id="notification-list">
+
+        </ul>
+        <button class="close-menu-btn">Fechar</button>
+      </div>
+    </div>
+
+
+    <div class="feed">
+      <% if (posts.length> 0) { %>
+        <% posts.forEach(item=> { %>
+          <div class="post">
+
+            <div class="post-header">
+              <a href="/user/<%= item.usuario_id %>" class="post-user">
+                <img src="<%= item.foto_perfil || '/default-profile.png' %>" alt="Foto de Perfil" class="post-user-img">
+                <span class="post-user-name">
+                  <%= item.user_name %>
+                </span>
+              </a>
+              <% if (user && user.id !==item.usuario_id) { %>
+                <form class="follow-form"
+                  action="/posts/<%= item.isFollowing ? 'unfollow' : 'follow' %>/<%= item.usuario_id %>" method="POST">
+                  <button type="submit" class="follow-btn">
+                    <%= item.isFollowing ? 'Seguindo' : 'Seguir' %>
+                  </button>
+                </form>
+                <% } %>
+            </div>
+
+
+            <% if (item.arquivo_foto && !item.fotos) { %>
+              <div class="post-image">
+                <img src="<%= item.arquivo_foto %>" alt="Imagem da Postagem">
+              </div>
+              <% } %>
+
+
+                <% if (item.fotos) { %>
+                  <div class="album-carrossel" style="position: relative;">
+                    <% if (item.fotos.length> 0) { %>
+                      <% item.fotos.split(',').forEach((foto, index)=> { %>
+                        <div class="carrossel-slide" style="display: <%= index === 0 ? 'block' : 'none' %>;">
+                          <img src="<%= foto.trim() %>" alt="Imagem do Álbum">
+                        </div>
+                        <% }) %>
+                          <button class="prev-btn">◀</button>
+                          <button class="next-btn">▶</button>
+                          <% } else { %>
+                            <p>Este álbum não contém fotos.</p>
+                            <% } %>
+                  </div>
+                  <div class="album-info">
+                    <h3>
+                      <%= item.nome || 'Álbum sem nome' %>
+                    </h3>
+                    <p>
+                      <%= item.descricao || 'Sem descrição' %>
+                    </p>
+                    <div class="post-date">
+                      <%= new Date(item.data_publicacao || item.data_criacao).toLocaleString('pt-BR') %>
+                    </div>
+                  </div>
+                  <% } else { %>
+
+                    <div class="post-caption">
+                      <p>
+                        <%= item.legenda || '' %>
+                      </p>
+                    </div>
+
+
+                    <% if (item.hashtags) { %>
+                      <div class="post-hashtags">
+                        <% item.hashtags.split(',').forEach(tag=> { %>
+                          <span>#<%= tag.trim() %></span>
+                          <% }) %>
+                      </div>
+                      <% } %>
+
+
+                        <% if (item.localizacao) { %>
+                          <div class="post-location">📍 <%= item.localizacao %>
+                          </div>
+                          <% } %>
+
+
+                            <div class="post-date">
+                              <%= new Date(item.data_publicacao || item.data_criacao).toLocaleString('pt-BR') %>
+                            </div>
+
+
+                            <div class="post-actions">
+                              <form action="/posts/<%= item.isLiked ? 'unlike' : 'like' %>/<%= item.id %>" method="POST"
+                                data-post-id="<%= item.id %>">
+                                <button type="submit" class="like-btn">
+                                  <%= item.isLiked ? '❤️' : '🤍' %>
+                                </button>
+                              </form>
+                              <span class="likes-count">
+                                <%= item.likes || 0 %> curtidas
+                              </span>
+                            </div>
+
+
+                            <div class="post-comments">
+                              <% if (Array.isArray(item.comentarios)) { %>
+                                <% item.comentarios.forEach(comentario=> { %>
+                                  <div class="comment" id="comment-<%= comentario.id %>">
+
+                                    <p>
+                                      <strong>
+                                        <%= comentario.user_name %>
+                                      </strong>
+                                      <span id="comment-text-<%= comentario.id %>">
+                                        <%= comentario.texto %>
+                                      </span>
+                                    </p>
+
+
+                                    <% if (user && user.id===comentario.usuario_id) { %>
+                                      <div class="comment-actions">
+                                        <button class="edit-comment-btn"
+                                          onclick="enableEditComment(<%= comentario.id %>)" title="Editar">✏️</button>
+                                        <form action="/posts/comment/delete/<%= comentario.id %>" method="POST"
+                                          style="display: inline;">
+                                          <button type="submit" class="delete-comment-btn" title="Apagar">🗑️</button>
+                                        </form>
+                                      </div>
+                                      <% } %>
+
+
+                                        <form id="edit-comment-form-<%= comentario.id %>"
+                                          action="/posts/comment/edit/<%= comentario.id %>" method="POST"
+                                          style="display: none;">
+                                          <input type="text" name="texto" value="<%= comentario.texto %>" required>
+                                          <button type="submit">Salvar</button>
+                                          <button type="button"
+                                            onclick="cancelEditComment(<%= comentario.id %>)">Cancelar</button>
+                                        </form>
+                                  </div>
+                                  <% }) %>
+                                    <% } else { %>
+                                      <p>Sem comentários.</p>
+                                      <% } %>
+                            </div>
+
+
+                            <% if (user) { %>
+                              <form action="/posts/comment/<%= item.id %>" method="POST" class="comment-form">
+                                <input type="text" name="texto" placeholder="Adicione um comentário..." required>
+                                <button type="submit" class="comment-btn">Publicar</button>
+                              </form>
+                              <% } %>
+                                <% } %>
+          </div>
+          <% }) %>
+            <% } else { %>
+              <p>Nenhuma publicação encontrada.</p>
+              <% } %>
+    </div>
+  </div>
+  <script src="/js/feed.js"></script>
+  <script src="/js/notifications.js"></script>
+</body>
+
+</html>

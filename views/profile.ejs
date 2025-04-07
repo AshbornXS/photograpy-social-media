@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfil</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+
+<body>
+  <div class="container">
+
+    <div class="profile-header">
+      <% if (user.foto_perfil) { %>
+        <img src="<%= user.foto_perfil %>" alt="Foto de Perfil" class="profile-picture">
+        <% } %>
+          <div class="profile-info">
+            <h2>
+              <%= user.nome %>
+            </h2>
+            <p><strong>Email:</strong>
+              <%= user.email %>
+            </p>
+            <% if (user.data_nascimento) { %>
+              <p><strong>Data de Nascimento:</strong>
+                <%= new Date(user.data_nascimento).toLocaleDateString('pt-BR') %>
+              </p>
+              <% } %>
+                <% if (user.biografia) { %>
+                  <p>
+                    <%= user.biografia %>
+                  </p>
+                  <% } %>
+                    <div class="profile-stats">
+                      <span><strong>Seguidores:</strong>
+                        <%= user.seguidores %>
+                      </span>
+                      <span><strong>Seguindo:</strong>
+                        <%= user.seguindo %>
+                      </span>
+                    </div>
+                    <div class="profile-actions">
+                      <button id="open-edit-profile-menu-btn">Editar Perfil</button>
+                      <button id="open-post-menu-btn">Criar Publicação</button>
+                      <button id="open-album-menu-btn">Criar Álbum</button>
+                    </div>
+          </div>
+    </div>
+
+
+    <div class="post-grid">
+      <% if (posts.length> 0 || albums.length > 0) { %>
+        <% posts.forEach(post=> { %>
+          <div class="post-thumbnail" data-post-id="<%= post.id %>">
+            <% if (post.arquivo_foto) { %>
+              <img src="<%= post.arquivo_foto %>" alt="Post">
+              <% } %>
+          </div>
+          <% }) %>
+
+            <% albums.forEach(album=> { %>
+              <div class="album-thumbnail" data-album-id="<%= album.id %>">
+                <% if (album.fotos) { %>
+                  <img src="<%= album.fotos.split(',')[0] %>" alt="Álbum">
+                  <% } %>
+                    <div class="album-overlay">
+                      <span>Álbum</span>
+                    </div>
+              </div>
+              <% }) %>
+                <% } else { %>
+                  <p>Você ainda não tem postagens ou álbuns.</p>
+                  <% } %>
+    </div>
+  </div>
+
+
+  <div id="post-menu" class="post-menu" style="display: none;">
+    <div class="post-menu-content">
+      <h2>Criar Nova Publicação</h2>
+      <form action="/posts/create" method="POST" enctype="multipart/form-data">
+        <label for="image">Imagem:</label>
+        <input type="file" id="image" name="image" required>
+        <img id="preview-image" src="#" alt="Pré-visualização da imagem"
+          style="display: none; max-width: 100%; margin-top: 10px;">
+
+        <label for="legenda">Legenda:</label>
+        <textarea id="legenda" name="legenda" rows="3" placeholder="Digite a legenda da sua publicação"
+          required></textarea>
+
+        <label for="localizacao">Localização:</label>
+        <div style="display: flex; align-items: center; gap: 5px;">
+          <input type="text" id="localizacao" name="localizacao" placeholder="Digite a localização (opcional)"
+            style="flex: 1;">
+          <button type="button" id="get-location-btn" class="get-location-btn">📍</button>
+        </div>
+
+        <label for="hashtags">Tags Disponíveis:</label>
+        <div id="available-tags" class="available-tags">
+          <% hashtags.forEach(tag=> { %>
+            <button type="button" class="tag-btn" data-tag="<%= tag.nome %>">#<%= tag.nome %></button>
+            <% }) %>
+        </div>
+        <input type="text" id="hashtags" name="hashtags"
+          placeholder="Digite novas tags separadas por vírgula (opcional)">
+
+        <button type="submit">Publicar</button>
+      </form>
+      <button class="close-menu-btn">Fechar</button>
+    </div>
+  </div>
+
+
+  <div id="album-menu" class="post-menu" style="display: none;">
+    <div class="post-menu-content">
+      <h2>Criar Novo Álbum</h2>
+      <form action="/posts/album/create" method="POST" enctype="multipart/form-data">
+        <label for="nome">Nome do Álbum:</label>
+        <input type="text" id="nome" name="nome" placeholder="Digite o nome do álbum" required>
+
+        <label for="descricao">Descrição:</label>
+        <textarea id="descricao" name="descricao" rows="3"
+          placeholder="Digite a descrição do álbum (opcional)"></textarea>
+
+        <label for="images">Imagens:</label>
+        <input type="file" id="images" name="images" multiple required>
+
+
+        <div id="preview-images-container" class="album-imagens"></div>
+
+        <button type="submit">Criar Álbum</button>
+      </form>
+      <button class="close-menu-btn">Fechar</button>
+    </div>
+  </div>
+
+
+  <div id="edit-profile-menu" class="post-menu" style="display: none;">
+    <div class="post-menu-content">
+      <h2>Editar Perfil</h2>
+      <form action="/auth/profile/edit" method="POST" enctype="multipart/form-data" onsubmit="showLoadingSpinner()">
+        <label for="nome">Nome:</label>
+        <input type="text" id="nome" name="nome" value="<%= user.nome %>" required>
+
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" value="<%= user.email %>" required>
+
+        <label for="data_nascimento">Data de Nascimento:</label>
+        <input type="date" id="data_nascimento" name="data_nascimento" value="<%= user.data_nascimento %>">
+
+        <label for="biografia">Biografia:</label>
+        <textarea id="biografia" name="biografia" rows="3"><%= user.biografia %></textarea>
+
+        <label for="foto_perfil">Foto de Perfil:</label>
+        <input type="file" id="foto_perfil" name="foto_perfil">
+        <% if (user.foto_perfil) { %>
+          <img src="<%= user.foto_perfil %>" alt="Foto Atual" class="foto-perfil" style="margin-top: 10px;">
+          <% } %>
+
+            <button type="submit">Salvar Alterações</button>
+      </form>
+
+
+      <h3>Alterar Senha</h3>
+      <form action="/auth/change-password" method="POST">
+        <label for="senha_atual">Senha Atual:</label>
+        <input type="password" id="senha_atual" name="senha_atual" placeholder="Digite sua senha atual" required>
+
+        <label for="nova_senha">Nova Senha:</label>
+        <input type="password" id="nova_senha" name="nova_senha" placeholder="Digite sua nova senha" required>
+
+        <button type="submit">Alterar Senha</button>
+      </form>
+
+      <div id="loading-spinner" style="display: none; text-align: center; margin-top: 10px;">
+        <p>Salvando...</p>
+      </div>
+      <button class="close-menu-btn">Fechar</button>
+    </div>
+  </div>
+
+
+  <div id="edit-post-menu" class="post-menu" style="display: none;">
+    <div class="post-menu-content">
+      <h2>Editar Publicação</h2>
+      <form id="edit-post-form" action="" method="POST" enctype="multipart/form-data">
+        <input type="hidden" id="edit-post-id" name="post_id">
+        <label for="edit-image">Imagem:</label>
+        <input type="file" id="edit-image" name="image">
+        <img id="edit-preview-image" src="#" alt="Pré-visualização da imagem"
+          style="display: none; max-width: 100%; margin-top: 10px;">
+
+        <label for="edit-legenda">Legenda:</label>
+        <textarea id="edit-legenda" name="legenda" rows="3" placeholder="Digite a legenda da sua publicação"
+          required></textarea>
+
+        <label for="edit-localizacao">Localização:</label>
+        <input type="text" id="edit-localizacao" name="localizacao" placeholder="Digite a localização (opcional)">
+
+        <label for="edit-hashtags">Tags Disponíveis:</label>
+        <div id="edit-available-tags" class="available-tags">
+          <% hashtags.forEach(tag=> { %>
+            <button type="button" class="tag-btn" data-tag="<%= tag.nome %>">#<%= tag.nome %></button>
+            <% }) %>
+        </div>
+        <input type="text" id="edit-hashtags" name="hashtags"
+          placeholder="Digite novas tags separadas por vírgula (opcional)">
+
+        <button type="submit">Salvar Alterações</button>
+      </form>
+
+
+      <form id="delete-post-form" action="" method="POST" style="margin-top: 20px;">
+        <button type="submit" class="delete-post-btn">Excluir Publicação</button>
+      </form>
+
+      <button class="close-menu-btn">Fechar</button>
+    </div>
+  </div>
+
+
+  <div id="edit-album-menu" class="post-menu" style="display: none;">
+    <div class="post-menu-content">
+      <h2>Editar Álbum</h2>
+      <form id="edit-album-form" action="" method="POST" enctype="multipart/form-data">
+        <input type="hidden" id="edit-album-id" name="album_id">
+        <label for="edit-album-nome">Nome do Álbum:</label>
+        <input type="text" id="edit-album-nome" name="nome" required>
+
+        <label for="edit-album-descricao">Descrição:</label>
+        <textarea id="edit-album-descricao" name="descricao" rows="3"></textarea>
+
+        <label for="add-images">Adicionar Imagens:</label>
+        <input type="file" id="add-images" name="images" multiple>
+
+
+        <div id="album-images-container" class="album-imagens"></div>
+
+
+        <div id="edit-preview-images-container" class="album-imagens"></div>
+
+        <button type="submit">Salvar Alterações</button>
+      </form>
+
+
+      <form id="delete-album-form" action="" method="POST" style="margin-top: 20px;">
+        <button type="submit" class="delete-post-btn">Excluir Álbum</button>
+      </form>
+
+      <button class="close-menu-btn">Fechar</button>
+    </div>
+  </div>
+
+  <script src="/js/profile.js"></script>
+</body>
+
+</html>
