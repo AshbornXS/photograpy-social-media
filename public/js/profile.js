@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
               const response = await fetch(
-                `https:
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
               );
               const data = await response.json();
 
@@ -196,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
       });
+
 
     albumThumbnails.forEach(thumbnail => {
       thumbnail.addEventListener('click', async () => {
