@@ -4,132 +4,65 @@ const fs = require('fs');
 
 exports.createPost = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
-
     const postData = {
-      usuario_id: req.session.user.id,
+      usuario_id: req.user.id,
       legenda: req.body.legenda,
       localizacao: req.body.localizacao || null,
-      hashtags: req.body.hashtags || null
+      hashtags: req.body.hashtags || null,
+      arquivo_foto: req.file ? `/uploads/posts/${req.file.filename}` : null
     };
-
-
-    if (req.file) {
-      const imageUrl = `/uploads/posts/${req.file.filename}`;
-      postData.arquivo_foto = imageUrl;
-    }
-
     await PostService.createPost(postData);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(201).json({ message: 'Post criado com sucesso' });
   } catch (error) {
     console.error('Erro ao criar post:', error);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(500).json({ message: 'Erro ao criar post' });
   }
 };
 
 exports.getFeed = async (req, res) => {
   try {
-    const userId = req.session.user ? req.session.user.id : null;
-
-
-    const posts = await PostService.getFeed(userId);
-
-
-    for (const post of posts) {
-      post.likes = await PostService.getLikesCount(post.id);
-      post.comentarios = post.comentarios || [];
-    }
-
-    res.render('index', { user: req.session.user || null, posts });
+    const { hashtags, localizacao, usuario_id } = req.query;
+    const filters = {};
+    if (hashtags) filters.hashtags = hashtags.split(',').map(tag => tag.trim());
+    if (localizacao) filters.localizacao = localizacao;
+    if (usuario_id) filters.usuario_id = usuario_id;
+    const feed = await PostService.getFeed(req.user.id, filters);
+    res.json({ feed });
   } catch (error) {
-    console.error('Erro ao carregar feed:', error);
-    res.render('index', { user: req.session.user || null, posts: [] });
+    console.error('Erro ao buscar feed:', error);
+    res.status(500).json({ message: 'Erro ao buscar feed' });
   }
 };
 
 exports.getUserPosts = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
-
-    const userId = req.session.user.id;
-
-
+    const userId = req.user.id;
     const posts = await PostService.getUserPosts(userId);
-
-
     const albums = await PostService.getUserAlbums(userId);
-
-
     const hashtags = await PostService.getAllHashtags();
-
-    res.render('profile', { user: req.session.user, posts, albums, hashtags });
+    res.json({ userId, posts, albums, hashtags });
   } catch (error) {
     console.error('Erro ao carregar posts do usuário:', error);
-    res.render('profile', { user: req.session.user, posts: [], albums: [], hashtags: [] });
+    res.status(500).json({ message: 'Erro ao carregar posts do usuário' });
   }
 };
 
-exports.deletePost = (req, res) => {
-  if (!req.session.user) return res.redirect('/auth/login');
-
-  PostService.getPostById(req.params.id, (error, post) => {
-    if (error || !post) {
-      console.error('Erro ao buscar postagem para exclusão:', error);
-      return res.redirect(`/user/${req.session.user.id}`);
-    }
-
+exports.deletePost = async (req, res) => {
+  try {
+    const post = await PostService.getPostById(req.params.id);
+    if (!post) return res.status(404).json({ message: 'Post não encontrado' });
+    if (post.usuario_id !== req.user.id) return res.status(403).json({ message: 'Acesso negado' });
 
     if (post.arquivo_foto) {
       const imagePath = path.join(__dirname, '..', post.arquivo_foto);
-      if (fs.existsSync(imagePath)) {
-        fs.unlink(imagePath, (err) => {
-          if (err) console.error('Erro ao excluir imagem da postagem:', err);
-        });
-      }
+      if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
     }
-
-
-    PostService.deletePost(req.params.id, (error) => {
-      if (error) {
-        console.error('Erro ao apagar post:', error);
-        return res.redirect(`/user/${req.session.user.id}`);
-      }
-      res.redirect(`/user/${req.session.user.id}`);
-    });
-  });
-};
-
-exports.getPostsByHashtag = (req, res) => {
-  const hashtags = req.query.hashtags ? req.query.hashtags.split(',') : [];
-
-  PostService.getAllHashtags((error, allHashtags) => {
-    if (error) {
-      console.error('Erro ao carregar hashtags:', error);
-      return res.render('index', { user: req.session.user || null, posts: [], hashtags: allHashtags, filtroHashtags: [] });
-    }
-
-
-    if (hashtags.length === 0) {
-      return PostService.getAllPosts((error, posts) => {
-        if (error) {
-          console.error('Erro ao carregar feed:', error);
-          return res.render('index', { user: req.session.user || null, posts: [], hashtags: allHashtags, filtroHashtags: [] });
-        }
-
-        res.render('index', { user: req.session.user || null, posts, hashtags: allHashtags, filtroHashtags: [] });
-      });
-    }
-
-
-    PostService.getPostsByHashtag(hashtags, (error, posts) => {
-      if (error) {
-        console.error('Erro ao carregar posts por hashtags:', error);
-        return res.render('index', { user: req.session.user || null, posts: [], hashtags: allHashtags, filtroHashtags: hashtags });
-      }
-
-      res.render('index', { user: req.session.user || null, posts, hashtags: allHashtags, filtroHashtags: hashtags });
-    });
-  });
+    await PostService.deletePost(req.params.id);
+    res.json({ message: 'Post deletado com sucesso' });
+  } catch (error) {
+    console.error('Erro ao apagar post:', error);
+    res.status(500).json({ message: 'Erro ao apagar post' });
+  }
 };
 
 exports.getPostById = (req, res) => {
@@ -147,52 +80,64 @@ exports.getPostById = (req, res) => {
 
 exports.updatePost = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
-
     const postId = req.params.id;
+    const userId = req.user.id;
+
+    // Busca o post para garantir que o usuário é o dono
+    const post = await PostService.getPostById(postId);
+    if (!post) {
+      return res.status(404).json({ message: 'Post não encontrado' });
+    }
+    if (post.usuario_id !== userId) {
+      return res.status(403).json({ message: 'Acesso negado' });
+    }
+
     const data = {
       legenda: req.body.legenda,
       localizacao: req.body.localizacao || null,
       hashtags: req.body.hashtags || null
     };
 
-
     if (req.file) {
       data.arquivo_foto = `/uploads/posts/${req.file.filename}`;
     }
 
     await PostService.updatePost(postId, data);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(200).json({ message: 'Post atualizado com sucesso' });
   } catch (error) {
     console.error('Erro ao atualizar postagem:', error);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(500).json({ message: 'Erro ao atualizar postagem' });
   }
 };
 
 exports.createAlbum = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
+    if (!req.user) {
+      return res.status(401).json({ message: 'Usuário não autenticado' });
+    }
 
     const albumData = {
-      usuario_id: req.session.user.id,
+      usuario_id: req.user.id,
       nome: req.body.nome,
       descricao: req.body.descricao || null,
-      fotos: req.files.map(file => ({
+      fotos: req.files ? req.files.map(file => ({
         arquivo_foto: `/uploads/posts/${file.filename}`
-      }))
+      })) : []
     };
 
     await PostService.createAlbum(albumData);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(201).json({ message: 'Álbum criado com sucesso' });
   } catch (error) {
     console.error('Erro ao criar álbum:', error);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(500).json({ message: 'Erro ao criar álbum' });
   }
 };
 
 exports.updateAlbum = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
+    if (!req.user) {
+      return res.status(401).json({ message: 'Usuário não autenticado' });
+    }
 
     const albumId = req.params.id;
     const albumData = {
@@ -200,9 +145,16 @@ exports.updateAlbum = async (req, res) => {
       descricao: req.body.descricao || null
     };
 
+    // Verifica se o usuário é dono do álbum
+    const album = await PostService.getAlbumByIdPromise(albumId);
+    if (!album) {
+      return res.status(404).json({ message: 'Álbum não encontrado' });
+    }
+    if (album.usuario_id !== req.user.id) {
+      return res.status(403).json({ message: 'Acesso negado' });
+    }
 
     await PostService.updateAlbum(albumId, albumData);
-
 
     if (req.files && req.files.length > 0) {
       const novasFotos = req.files.map(file => ({
@@ -212,42 +164,48 @@ exports.updateAlbum = async (req, res) => {
       await PostService.addPhotosToAlbum(novasFotos);
     }
 
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(200).json({ message: 'Álbum atualizado com sucesso' });
   } catch (error) {
     console.error('Erro ao atualizar álbum:', error);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(500).json({ message: 'Erro ao atualizar álbum' });
   }
 };
 
 exports.deleteAlbum = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
+    if (!req.user) {
+      return res.status(401).json({ message: 'Usuário não autenticado' });
+    }
 
     const albumId = req.params.id;
+    const album = await PostService.getAlbumByIdPromise(albumId);
+    if (!album) {
+      return res.status(404).json({ message: 'Álbum não encontrado' });
+    }
+    if (album.usuario_id !== req.user.id) {
+      return res.status(403).json({ message: 'Acesso negado' });
+    }
+
     await PostService.deleteAlbum(albumId);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(200).json({ message: 'Álbum excluído com sucesso' });
   } catch (error) {
     console.error('Erro ao excluir álbum:', error);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(500).json({ message: 'Erro ao excluir álbum' });
   }
 };
 
-exports.getAlbumById = (req, res) => {
-  const albumId = req.params.id;
-
-  PostService.getAlbumById(albumId, (error, album) => {
-    if (error) {
-      console.error('Erro ao buscar álbum:', error);
-      return res.status(500).json({ error: 'Erro ao buscar álbum' });
-    }
-
+exports.getAlbumById = async (req, res) => {
+  try {
+    const albumId = req.params.id;
+    const album = await PostService.getAlbumByIdPromise(albumId);
     if (!album) {
-      console.error('Álbum não encontrado:', albumId);
-      return res.status(404).json({ error: 'Álbum não encontrado' });
+      return res.status(404).json({ message: 'Álbum não encontrado' });
     }
-
     res.json(album);
-  });
+  } catch (error) {
+    console.error('Erro ao buscar álbum:', error);
+    res.status(500).json({ error: 'Erro ao buscar álbum' });
+  }
 };
 
 exports.createNotification = async (req, res) => {
@@ -301,22 +259,15 @@ exports.markNotificationAsRead = async (req, res) => {
 
 exports.likePost = async (req, res) => {
   try {
-    if (!req.session.user) {
-      return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
-    }
-
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     const postId = req.params.id;
-
 
     const alreadyLiked = await PostService.isPostLikedByUser(postId, userId);
     if (alreadyLiked) {
       return res.status(400).json({ success: false, message: 'Você já curtiu esta postagem' });
     }
 
-
     await PostService.likePost(userId, postId);
-
 
     const likesCount = await PostService.getLikesCount(postId);
 
@@ -329,22 +280,15 @@ exports.likePost = async (req, res) => {
 
 exports.unlikePost = async (req, res) => {
   try {
-    if (!req.session.user) {
-      return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
-    }
-
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     const postId = req.params.id;
-
 
     const alreadyLiked = await PostService.isPostLikedByUser(postId, userId);
     if (!alreadyLiked) {
       return res.status(400).json({ success: false, message: 'Você ainda não curtiu esta postagem' });
     }
 
-
     await PostService.unlikePost(userId, postId);
-
 
     const likesCount = await PostService.getLikesCount(postId);
 
@@ -357,28 +301,28 @@ exports.unlikePost = async (req, res) => {
 
 exports.addComment = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
+    }
 
     const commentData = {
       publicacao_id: req.params.id,
-      usuario_id: req.session.user.id,
+      usuario_id: req.user.id,
       texto: req.body.texto
     };
 
     await PostService.addComment(commentData);
-    res.redirect(`/posts/feed`);
+    res.status(201).json({ success: true, message: 'Comentário adicionado com sucesso' });
   } catch (error) {
     console.error('Erro ao adicionar comentário:', error);
-    res.redirect(`/posts/feed`);
+    res.status(500).json({ success: false, error: 'Erro ao adicionar comentário' });
   }
 };
 
 exports.getComments = async (req, res) => {
   try {
     const postId = req.params.id;
-    const userId = req.session.user ? req.session.user.id : null;
-    const comments = await PostService.getCommentsWithOwnership(postId, userId);
-    console.log(comments);
+    const comments = await PostService.getComments(postId);
     res.json(comments);
   } catch (error) {
     console.error('Erro ao buscar comentários:', error);
@@ -393,12 +337,10 @@ exports.editComment = async (req, res) => {
     const commentId = req.params.id;
     const { texto } = req.body;
 
-
     const comment = await PostService.getCommentById(commentId);
     if (!comment || comment.usuario_id !== req.session.user.id) {
       return res.redirect('/posts/feed');
     }
-
 
     await PostService.editComment(commentId, texto);
     res.redirect('/posts/feed');
@@ -410,21 +352,25 @@ exports.editComment = async (req, res) => {
 
 exports.deleteComment = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
-
-    const commentId = req.params.id;
-
-
-    const comment = await PostService.getCommentById(commentId);
-    if (!comment || comment.usuario_id !== req.session.user.id) {
-      return res.redirect('/posts/feed');
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
     }
 
+    const commentId = req.params.id;
+    const comment = await PostService.getCommentById(commentId);
+
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comentário não encontrado' });
+    }
+
+    if (comment.usuario_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Acesso negado' });
+    }
 
     await PostService.deleteComment(commentId);
-    res.redirect('/posts/feed');
+    res.status(200).json({ success: true, message: 'Comentário apagado com sucesso' });
   } catch (error) {
     console.error('Erro ao apagar comentário:', error);
-    res.redirect('/posts/feed');
+    res.status(500).json({ success: false, error: 'Erro ao apagar comentário' });
   }
 };

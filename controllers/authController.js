@@ -3,55 +3,41 @@ const path = require('path');
 const fs = require('fs');
 const UserRepository = require('../repositories/userRepository');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const SECRET = process.env.JWT_SECRET || 'secretonava';
 
 exports.register = async (req, res) => {
   try {
     const result = await AuthService.register(req.body);
-
     if (result.success) {
-      const loginResult = await AuthService.login(req.body.email, req.body.senha);
-      if (loginResult.success) {
-        req.session.user = loginResult.user;
-        return res.redirect('/');
-      }
+      return res.status(201).json({ message: result.message });
     }
-
-    res.render('register', {
-      message: result.message,
-      nome: req.body.nome || '',
-      email: req.body.email || ''
-    });
+    res.status(400).json({ message: result.message });
   } catch (error) {
     console.error('Erro no registro:', error);
-    res.render('register', {
-      message: 'Erro no cadastro. Tente novamente.',
-      nome: req.body.nome || '',
-      email: req.body.email || ''
-    });
+    res.status(500).json({ message: 'Erro no cadastro. Tente novamente.' });
   }
 };
 
 exports.login = async (req, res) => {
   try {
     const result = await AuthService.login(req.body.email, req.body.senha);
-
     if (!result.success) {
-      return res.render('login', { message: result.message });
+      return res.status(401).json({ message: result.message });
     }
 
-    req.session.user = result.user;
-    res.redirect('/');
+    const user = result.user;
+    const token = jwt.sign(
+      { id: user.id, nome: user.nome, email: user.email },
+      SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ token, user: { id: user.id, nome: user.nome, email: user.email } });
   } catch (error) {
     console.error('Erro no login:', error);
-    res.render('login', { message: 'Erro ao realizar login. Tente novamente.' });
+    res.status(500).json({ message: 'Erro ao realizar login. Tente novamente.' });
   }
-};
-
-exports.logout = (req, res) => {
-  req.session.destroy((err) => {
-    if (err) console.error('Erro ao encerrar a sessão:', err);
-    res.redirect('/');
-  });
 };
 
 exports.updateProfile = async (req, res) => {
@@ -118,66 +104,36 @@ exports.unfollowUser = async (req, res) => {
   }
 };
 
-exports.loginPage = (req, res) => {
-  if (req.session.user) {
-    return res.redirect('/');
-  }
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.render('login', { message: '' });
-};
-
-exports.registerPage = (req, res) => {
-  if (req.session.user) {
-    return res.redirect('/');
-  }
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.render('register', { message: '', nome: '', email: '' });
-};
-
 exports.changePassword = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
+    if (!req.user) {
+      return res.status(401).json({ message: 'Usuário não autenticado.' });
+    }
 
-    const userId = req.session.user.id;
+    const userId = req.user.id;
     const { senha_atual, nova_senha } = req.body;
-
 
     const user = await UserRepository.getUserProfile(userId);
     if (!user || !user.senha) {
-      return res.render('profile', {
-        user: req.session.user,
-        message: 'Erro ao buscar dados do usuário.',
-        posts: [],
-        albums: [],
-        hashtags: []
-      });
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
     }
 
     const isPasswordValid = await bcrypt.compare(senha_atual, user.senha);
 
     if (!isPasswordValid) {
-      return res.render('profile', {
-        user: req.session.user,
-        message: 'Senha atual incorreta.',
-        posts: [],
-        albums: [],
-        hashtags: []
-      });
+      return res.status(400).json({ message: 'Senha atual incorreta.' });
     }
-
 
     const hashedPassword = await bcrypt.hash(nova_senha, 10);
 
-
     await UserRepository.updatePassword(userId, hashedPassword);
 
-
-    req.session.destroy((err) => {
-      if (err) console.error('Erro ao encerrar a sessão:', err);
-      res.redirect('/auth/login');
+    res.status(200).json({
+      message: 'Senha alterada com sucesso. Faça login novamente.',
+      tokenInvalidated: true
     });
   } catch (error) {
     console.error('Erro ao alterar senha:', error);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(500).json({ message: 'Erro ao alterar senha.' });
   }
 };

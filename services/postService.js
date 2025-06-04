@@ -147,14 +147,13 @@ class PostService {
     });
   }
 
-  static getPostById(postId, callback) {
-    PostRepository.findById(postId, (err, post) => {
-      if (err) {
-        console.error('Erro ao buscar postagem no serviço:', err);
-        return callback(err);
-      }
-      callback(null, post);
-    });
+  static async getPostById(postId) {
+    try {
+      const post = await PostRepository.getPostById(postId);
+      return post;
+    } catch (error) {
+      throw error;
+    }
   }
 
   static async createAlbum(albumData) {
@@ -380,14 +379,21 @@ class PostService {
     }
   }
 
-  static async getFeed(userId) {
+  static async getFeed(userId, filters = {}) {
     try {
+      let posts = [];
 
-      const posts = await PostRepository.findAll();
-
+      if (filters.hashtags && filters.hashtags.length > 0) {
+        posts = await PostRepository.findByHashtag(filters.hashtags);
+      } else if (filters.localizacao) {
+        posts = await PostRepository.findByLocalizacao(filters.localizacao);
+      } else if (filters.usuario_id) {
+        posts = await PostRepository.findByUserId(filters.usuario_id);
+      } else {
+        posts = await PostRepository.findAll();
+      }
 
       const albums = await PostRepository.findAllAlbums();
-
 
       for (const post of posts) {
         post.isLiked = userId ? await PostRepository.isPostLikedByUser(post.id, userId) : false;
@@ -395,11 +401,9 @@ class PostService {
         post.comentarios = await PostRepository.getComments(post.id) || [];
       }
 
-
       for (const album of albums) {
         album.isFollowing = userId ? await PostRepository.isUserFollowing(userId, album.usuario_id) : false;
       }
-
 
       const feed = [...posts, ...albums].sort((a, b) => {
         const dateA = new Date(a.data_publicacao || a.data_criacao);
@@ -421,6 +425,15 @@ class PostService {
       console.error('Erro ao buscar número de curtidas:', error);
       throw error;
     }
+  }
+
+  static async getAlbumByIdPromise(albumId) {
+    return new Promise((resolve, reject) => {
+      this.getAlbumById(albumId, (err, album) => {
+        if (err) return reject(err);
+        resolve(album);
+      });
+    });
   }
 }
 

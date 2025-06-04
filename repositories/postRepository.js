@@ -56,25 +56,56 @@ class PostRepository {
     });
   }
 
-  static findByHashtag(hashtags, callback) {
-    const placeholders = hashtags.map(() => '?').join(',');
-    const sql = `
-      SELECT Publicacoes.*,
+  static findByHashtag(hashtags) {
+    return new Promise((resolve, reject) => {
+      if (!Array.isArray(hashtags) || hashtags.length === 0) {
+        // Retorna array vazio se não houver hashtags
+        return resolve([]);
+      }
+      const placeholders = hashtags.map(() => '?').join(',');
+      const sql = `
+        SELECT Publicacoes.*,
+        Usuarios.nome AS user_name,
+        Usuarios.foto_perfil,
+        MAX(Fotos.arquivo_foto) AS arquivo_foto,
+        GROUP_CONCAT(Hashtags.nome) AS hashtags
+        FROM Publicacoes
+        JOIN Usuarios ON Publicacoes.usuario_id = Usuarios.id
+        LEFT JOIN Fotos ON Fotos.publicacao_id = Publicacoes.id
+        LEFT JOIN Publicacoes_Hashtags ON Publicacoes.id = Publicacoes_Hashtags.publicacao_id
+        LEFT JOIN Hashtags ON Publicacoes_Hashtags.hashtag_id = Hashtags.id
+        WHERE Hashtags.nome IN (${placeholders})
+        GROUP BY Publicacoes.id, Usuarios.nome, Usuarios.foto_perfil
+        ORDER BY Publicacoes.data_publicacao DESC
+      `;
+      db.query(sql, hashtags, (err, results) => {
+        if (err) return reject(err);
+        resolve(results || []);
+      });
+    });
+  }
+
+  static findByLocalizacao(localizacao) {
+  const sql = `
+    SELECT
+      Publicacoes.*,
       Usuarios.nome AS user_name,
       Usuarios.foto_perfil,
-      MAX(Fotos.arquivo_foto) AS arquivo_foto,
-      GROUP_CONCAT(Hashtags.nome) AS hashtags
-      FROM Publicacoes
-      JOIN Usuarios ON Publicacoes.usuario_id = Usuarios.id
-      LEFT JOIN Fotos ON Fotos.publicacao_id = Publicacoes.id
-      LEFT JOIN Publicacoes_Hashtags ON Publicacoes.id = Publicacoes_Hashtags.publicacao_id
-      LEFT JOIN Hashtags ON Publicacoes_Hashtags.hashtag_id = Hashtags.id
-      WHERE Hashtags.nome IN (${placeholders})
-      GROUP BY Publicacoes.id, Usuarios.nome, Usuarios.foto_perfil
-      ORDER BY Publicacoes.data_publicacao DESC
-    `;
-    db.query(sql, hashtags, callback);
-  }
+      MAX(Fotos.arquivo_foto) AS arquivo_foto
+    FROM Publicacoes
+    JOIN Usuarios ON Publicacoes.usuario_id = Usuarios.id
+    LEFT JOIN Fotos ON Fotos.publicacao_id = Publicacoes.id
+    WHERE Publicacoes.localizacao LIKE ?
+    GROUP BY Publicacoes.id, Usuarios.nome, Usuarios.foto_perfil
+    ORDER BY Publicacoes.data_publicacao DESC
+  `;
+  return new Promise((resolve, reject) => {
+    db.query(sql, [`%${localizacao}%`], (err, results) => {
+      if (err) return reject(err);
+      resolve(results || []);
+    });
+  });
+}
 
   static deleteById(postId, callback) {
     const sql = 'DELETE FROM Publicacoes WHERE id = ?';
@@ -482,6 +513,18 @@ class PostRepository {
       db.query(sql, (err, results) => {
         if (err) return reject(err);
         resolve(results);
+      });
+    });
+  }
+
+  static getPostById(postId) {
+    return new Promise((resolve, reject) => {
+      const sql = `
+        SELECT * FROM Publicacoes WHERE id = ?
+      `;
+      db.query(sql, [postId], (err, results) => {
+        if (err) return reject(err);
+        resolve(results && results.length > 0 ? results[0] : null);
       });
     });
   }

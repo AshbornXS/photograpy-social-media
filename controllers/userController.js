@@ -3,31 +3,25 @@ const PostService = require('../services/postService');
 
 exports.followUser = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
-
-    const followerId = req.session.user.id;
+    const followerId = req.user.id;
     const userId = req.params.id;
-
     await UserService.followUser(followerId, userId);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.json({ message: 'Agora você está seguindo este usuário.' });
   } catch (error) {
     console.error('Erro ao seguir usuário:', error);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(500).json({ message: 'Erro ao seguir usuário' });
   }
 };
 
 exports.unfollowUser = async (req, res) => {
   try {
-    if (!req.session.user) return res.redirect('/auth/login');
-
-    const followerId = req.session.user.id;
+    const followerId = req.user.id;
     const userId = req.params.id;
-
     await UserService.unfollowUser(followerId, userId);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.json({ message: 'Você deixou de seguir este usuário.' });
   } catch (error) {
     console.error('Erro ao deixar de seguir usuário:', error);
-    res.redirect(`/user/${req.session.user.id}`);
+    res.status(500).json({ message: 'Erro ao deixar de seguir usuário' });
   }
 };
 
@@ -38,35 +32,30 @@ exports.getUserProfile = async (req, res) => {
     const userPosts = await PostService.getUserPosts(userId);
     const userAlbums = await PostService.getUserAlbums(userId);
 
-
     userProfile.seguidores = await UserService.getFollowersCount(userId);
     userProfile.seguindo = await UserService.getFollowingCount(userId);
 
-
-    userProfile.isFollowing = req.session.user
-      ? await UserService.isUserFollowing(req.session.user.id, userId)
-      : false;
-
-
-    const isOwnProfile = req.session.user && req.session.user.id === parseInt(userId);
-
-    if (isOwnProfile) {
-      res.render('profile', {
-        user: { ...req.session.user, seguidores: userProfile.seguidores, seguindo: userProfile.seguindo },
-        posts: userPosts,
-        albums: userAlbums,
-        hashtags: []
-      });
-    } else {
-      res.render('userProfile', {
-        userProfile,
-        userPosts,
-        userAlbums,
-        user: req.session.user || null
-      });
+    // Verifica se o usuário autenticado está seguindo este perfil
+    let isFollowing = false;
+    let isOwnProfile = false;
+    if (req.user && req.user.id) {
+      isFollowing = await UserService.isUserFollowing(req.user.id, userId);
+      isOwnProfile = req.user.id === parseInt(userId);
     }
+
+    res.json({
+      userProfile: {
+        ...userProfile,
+        seguidores: userProfile.seguidores,
+        seguindo: userProfile.seguindo,
+        isFollowing,
+        isOwnProfile
+      },
+      posts: userPosts,
+      albums: userAlbums
+    });
   } catch (error) {
     console.error('Erro ao carregar perfil do usuário:', error);
-    res.status(500).send('Erro ao carregar perfil do usuário.');
+    res.status(500).json({ message: 'Erro ao carregar perfil do usuário.' });
   }
 };

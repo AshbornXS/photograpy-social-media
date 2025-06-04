@@ -4,6 +4,7 @@ const authController = require('../controllers/authController');
 const postController = require('../controllers/postController');
 const multer = require('multer');
 const path = require('path');
+const authJwt = require('../middlewares/authJwt');
 
 
 const profileStorage = multer.diskStorage({
@@ -26,26 +27,16 @@ router.get('/profile', postController.getUserPosts);
 router.post('/profile/edit/:id', postController.updatePost);
 router.post('/profile/delete/:id', postController.deletePost);
 
-
-router.get('/register', authController.registerPage);
-
-
-router.get('/login', authController.loginPage);
-
-
 router.post('/register', authController.register);
 
 
 router.post('/login', authController.login);
-
-
-router.get('/logout', authController.logout);
 
 router.post('/profile/edit', profileUpload.single('foto_perfil'), authController.updateProfile);
 
 router.post('/follow/:id', authController.followUser);
 router.post('/unfollow/:id', authController.unfollowUser);
 
-router.post('/change-password', authController.changePassword);
+router.post('/change-password', authJwt, authController.changePassword);
 
 module.exports = router;
